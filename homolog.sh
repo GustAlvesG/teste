@@ -466,6 +466,12 @@ proxy_set_header Upgrade \$http_upgrade;
 proxy_set_header Connection "upgrade";
 # a senha do auth_basic nao chega na aplicacao
 proxy_set_header Authorization "";
+# O Next escuta em 127.0.0.1 (-H) e por isso o middleware de login responde com Location
+# absoluto "http(s)://localhost:${HML_PORTA}/...". Reescreve para o dominio publico.
+proxy_redirect http://localhost:${HML_PORTA}/  https://\$host/;
+proxy_redirect https://localhost:${HML_PORTA}/ https://\$host/;
+proxy_redirect http://127.0.0.1:${HML_PORTA}/  https://\$host/;
+proxy_redirect https://127.0.0.1:${HML_PORTA}/ https://\$host/;
 # add_header numa location ANULA os herdados do http/server: por isso repetimos todos aqui
 add_header X-Robots-Tag "noindex, nofollow" always;
 add_header X-Frame-Options "SAMEORIGIN" always;
@@ -556,6 +562,11 @@ cmd_verificar() {
 
   h="$(curl_local --netrc-file "$netrc" -o /dev/null -D - "$base/homolog" | tr -d '\r')"
   printf '%s\n' "$h" | grep -iE '^(HTTP|location)' | sed 's/^/    /'
+  if printf '%s\n' "$h" | grep -qiE "^location: *https?://(localhost|127\.0\.0\.1)|^location:.*:${HML_PORTA}/"; then
+    aviso "Redirect aponta para localhost/porta ${HML_PORTA}: falta o proxy_redirect em $SNIPPET_PROXY"
+  else
+    ok "Redirect de /homolog fica no dominio publico"
+  fi
 
   echo "  Cookies de /homolog/api/auth/csrf (valores ocultos):"
   curl_local --netrc-file "$netrc" -o /dev/null -D - "$base/homolog/api/auth/csrf" | tr -d '\r' \
